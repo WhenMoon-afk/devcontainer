@@ -1,26 +1,25 @@
 # Custom devcontainer extending obra's packnplay base
-# Adds: bun, uv pre-installed
+# Adds: bun, uv pre-installed in system PATH
 FROM ghcr.io/obra/packnplay/devcontainer:latest
 
-LABEL org.opencontainers.image.source="https://github.com/WhenMoon-afk/devcontainer-image"
+LABEL org.opencontainers.image.source="https://github.com/WhenMoon-afk/devcontainer"
 LABEL org.opencontainers.image.description="Packnplay devcontainer with bun and uv pre-installed"
 
 USER root
 
-# Install bun
-RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/home/vscode/.bun bash && \
-    chown -R vscode:vscode /home/vscode/.bun
+# Install bun directly to /usr/local/bin
+RUN curl -fsSL https://github.com/oven-sh/bun/releases/latest/download/bun-linux-x64.zip -o /tmp/bun.zip && \
+    unzip /tmp/bun.zip -d /tmp && \
+    mv /tmp/bun-linux-x64/bun /usr/local/bin/ && \
+    chmod +x /usr/local/bin/bun && \
+    rm -rf /tmp/bun.zip /tmp/bun-linux-x64
 
-# Install uv
+# Install uv directly to /usr/local/bin
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
-
-# Add bun to PATH
-RUN echo 'export BUN_INSTALL="$HOME/.bun"' >> /home/vscode/.bashrc && \
-    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> /home/vscode/.bashrc
 
 USER vscode
 
-# Verify
-RUN /home/vscode/.bun/bin/bun --version && /usr/local/bin/uv --version
+# Verify both are in PATH
+RUN bun --version && uv --version
 
 CMD ["/bin/bash"]
