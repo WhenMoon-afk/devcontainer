@@ -8,6 +8,7 @@ Everything from obra's base image, plus:
 
 - **bun** - Fast JS/TS runtime and package manager
 - **uv** - Fast Python package manager
+- **tmux** - Terminal multiplexer for session persistence
 
 ## Usage with packnplay
 
@@ -37,10 +38,23 @@ The image rebuilds weekly (Sunday 00:00 UTC) to pick up:
 docker build -t my-devcontainer .
 ```
 
+## Session Persistence with tmux
+
+Run Claude inside tmux to survive disconnects:
+
+```bash
+tmux new -s claude
+claude --dangerously-skip-permissions
+```
+
+Detach: `Ctrl+b d`
+Reattach: `tmux a -t claude`
+
 ## Versions
 
 Check installed versions:
 ```bash
 bun --version
 uv --version
+tmux -V
 ```
