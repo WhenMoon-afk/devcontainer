@@ -7,16 +7,14 @@ LABEL org.opencontainers.image.description="Packnplay devcontainer with bun, uv,
 
 USER root
 
-# Install system packages
+# Install system packages (including docker CLI for orchestrator mode)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy bun binary from official image (cleaner than downloading zip)
 COPY --from=oven/bun:latest /usr/local/bin/bun /usr/local/bin/bun
-
-# Install tmux for session persistence
-RUN apt-get update && apt-get install -y --no-install-recommends tmux && rm -rf /var/lib/apt/lists/*
 
 # Install uv directly to /usr/local/bin
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh

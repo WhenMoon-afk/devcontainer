@@ -123,10 +123,37 @@ alias pnpc='pnp --continue'
 
 # Orchestrator mode - has Docker access to spawn other containers
 # Usage: pnp-orchestrator [claude-flags...]
+# Supports --system-file <path> which gets converted to --system-prompt
 pnp-orchestrator() {
+  local system_file=""
+  local other_args=()
+
+  # Parse --system-file specially, pass rest through
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --system-file)
+        system_file="$2"
+        shift 2
+        ;;
+      *)
+        other_args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  # If --system-file provided, read it and add as --system-prompt
+  if [[ -n "$system_file" ]]; then
+    if [[ ! -f "$system_file" ]]; then
+      echo "Error: System file not found: $system_file" >&2
+      return 1
+    fi
+    other_args=(--system-prompt "$(cat "$system_file")" "${other_args[@]}")
+  fi
+
   local args_b64=""
-  if [[ $# -gt 0 ]]; then
-    args_b64=$(printf '%s\0' "$@" | base64 -w0)
+  if [[ ${#other_args[@]} -gt 0 ]]; then
+    args_b64=$(printf '%s\0' "${other_args[@]}" | base64 -w0)
   fi
 
   local slot=$(_pnp_find_slot)
@@ -167,10 +194,10 @@ pnp-orchestrator() {
       export MOMENTUM_DB_PATH=/home/vscode/.claude/momentum/momentum.db
       export PRIVATE_JOURNAL_DB_PATH=/home/vscode/.claude/private-journal/journal.db
 
-      # Install docker CLI if not present
+      # Install docker CLI if not present (just the CLI, not the engine)
       if ! command -v docker &>/dev/null; then
         echo 'Installing Docker CLI...'
-        curl -fsSL https://get.docker.com | sudo sh 2>/dev/null || true
+        sudo apt-get update -qq && sudo apt-get install -y -qq docker.io >/dev/null 2>&1 || true
       fi
 
       # Decode and execute with passed arguments
