@@ -166,9 +166,20 @@ pnp-orchestrator() {
   local dir_name=$(basename "$PWD")
   local container_name="pnp-orchestrator-${dir_name}"
 
-  # Run with Docker socket mounted
-  docker run -it --rm \
+  # Check if container already exists
+  if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
+    echo "Reconnecting to existing orchestrator container..."
+    docker start -ai "$container_name"
+    return
+  fi
+
+  # Get docker group ID from host for socket permissions
+  local docker_gid=$(stat -c '%g' /var/run/docker.sock)
+
+  # Run with Docker socket mounted (persistent container, not --rm)
+  docker run -it \
     --name "$container_name" \
+    --group-add "$docker_gid" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$HOME/.claude:/home/vscode/.claude" \
     -v "$HOME/.gitconfig:/home/vscode/.gitconfig:ro" \
@@ -193,12 +204,6 @@ pnp-orchestrator() {
       export PERSONAL_SUPERPOWERS_DIR=/home/vscode/.claude/superpowers
       export MOMENTUM_DB_PATH=/home/vscode/.claude/momentum/momentum.db
       export PRIVATE_JOURNAL_DB_PATH=/home/vscode/.claude/private-journal/journal.db
-
-      # Install docker CLI if not present (just the CLI, not the engine)
-      if ! command -v docker &>/dev/null; then
-        echo 'Installing Docker CLI...'
-        sudo apt-get update -qq && sudo apt-get install -y -qq docker.io >/dev/null 2>&1 || true
-      fi
 
       # Decode and execute with passed arguments
       ARGS_B64='$args_b64'
