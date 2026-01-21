@@ -30,6 +30,10 @@ COPY --chown=vscode:vscode tools/ /home/vscode/.local/share/devcontainer-tools/
 
 USER vscode
 
+# Add Claude tools bin to PATH for all sessions
+RUN echo 'export PATH="/home/vscode/.claude/bin:$PATH"' >> ~/.bashrc && \
+    echo 'export PATH="/home/vscode/.claude/bin:$PATH"' >> ~/.profile
+
 # Verify installations
 RUN bun --version && uv --version && \
     vercel --version && npx convex --version && wrangler --version && \
