@@ -140,6 +140,45 @@ claude --dangerously-skip-permissions
 Detach: `Ctrl+b d`
 Reattach: `tmux a -t claude`
 
+## Host Shell Utilities
+
+The `shell/` directory contains bash functions for your **host machine** that wrap packnplay for easier Claude Code workflows.
+
+### Installation
+
+Add to your `~/.bashrc`:
+
+```bash
+source ~/path/to/devcontainer/shell/pnp-utils.sh
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `pnp` | Launch Claude in container (auto port selection) |
+| `pnp --debug` / `pnpd` | Launch with debug output |
+| `pnp --resume` / `pnpr` | Resume last conversation |
+| `pnp --continue` / `pnpc` | Continue mode |
+| `pnp-status` | Show running containers and port slots |
+| `pnp-stop <name>` | Stop a specific container |
+| `pnp-stop --all` | Stop all packnplay containers |
+| `pnp-clean` | Remove stopped containers |
+| `pnp-attach` | Attach bash to container (no Claude) |
+| `pnp-ports` | Show active port mappings |
+| `pnp-open [slot]` | Open browser to web port |
+| `pnp-ask "prompt"` | Run one-shot prompt |
+| `pnp-help` | Show all commands |
+
+### Environment Variables (inside container)
+
+These are set automatically when using `pnp`:
+
+- `PNP_SLOT` - Current port slot (1-10)
+- `PNP_HOST_WEB` - Host port mapped to container:3000
+- `PNP_HOST_VITE` - Host port mapped to container:5173
+- `PNP_HOST_BACKEND` - Host port mapped to container:8000
+
 ## Verify Installation
 
 ```bash

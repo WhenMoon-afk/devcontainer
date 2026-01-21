@@ -188,7 +188,7 @@ pnp-orchestrator() {
 
 pnp-status() {
   echo "=== PackNPlay Containers ==="
-  docker ps --filter "label=devcontainer.local_folder" \
+  docker ps --filter "name=packnplay-" \
     --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}" 2>/dev/null || echo "No containers"
   echo ""
   echo "=== Port Slots ==="
@@ -203,7 +203,7 @@ pnp-status() {
 pnp-stop() {
   if [[ "$1" == "--all" || "$1" == "-a" ]]; then
     echo "Stopping all packnplay containers..."
-    docker ps --filter "label=devcontainer.local_folder" -q | xargs -r docker stop
+    docker ps --filter "name=packnplay-" -q | xargs -r docker stop
   elif [[ -n "$1" ]]; then
     echo "Stopping container: $1"
     docker stop "$1"
@@ -211,7 +211,7 @@ pnp-stop() {
     echo "Usage: pnp-stop <container-name> or pnp-stop --all"
     echo ""
     echo "Running containers:"
-    docker ps --filter "label=devcontainer.local_folder" --format "  {{.Names}}"
+    docker ps --filter "name=packnplay-" --format "  {{.Names}}"
   fi
 }
 
