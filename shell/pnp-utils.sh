@@ -81,15 +81,19 @@ pnp() {
     # One-time native addon rebuild for this Node version
     SETUP_MARKER=\"/home/vscode/.claude/.pnp-setup-\$(node -v | tr -d 'v')\"
     if [ ! -f \"\$SETUP_MARKER\" ]; then
-      echo 'First run: checking native addons...'
-      for plugin_dir in /home/vscode/.claude/plugins/cache/*/momentum/*/; do
-        if [ -d \"\$plugin_dir/node_modules/better-sqlite3\" ]; then
-          echo \"Rebuilding better-sqlite3 in \$plugin_dir\"
-          (cd \"\$plugin_dir\" && npm rebuild better-sqlite3 2>/dev/null) || true
+      echo 'First run: rebuilding native addons for Node '\$(node -v)'...'
+      for plugin_dir in /home/vscode/.claude/plugins/cache/*/*/*/; do
+        if [ -d \"\$plugin_dir/node_modules\" ]; then
+          # Check if this plugin has any native modules
+          if find \"\$plugin_dir/node_modules\" -name '*.node' -type f 2>/dev/null | head -1 | grep -q .; then
+            plugin_name=\$(echo \"\$plugin_dir\" | sed 's|.*/cache/||' | sed 's|/\$||')
+            echo \"  Rebuilding: \$plugin_name\"
+            (cd \"\$plugin_dir\" && npm rebuild --silent 2>&1) || echo \"    (failed, continuing)\"
+          fi
         fi
       done
       touch \"\$SETUP_MARKER\" 2>/dev/null || true
-      echo 'Setup complete.'
+      echo 'Native addon setup complete.'
     fi
 
     # Environment
@@ -200,6 +204,24 @@ pnp-orchestrator() {
       # Setup PATH and symlinks
       sudo mkdir -p /home/$PNP_HOST_USER 2>/dev/null || true
       sudo ln -sf /home/vscode/.claude /home/$PNP_HOST_USER/.claude 2>/dev/null || true
+
+      # One-time native addon rebuild for this Node version
+      SETUP_MARKER=\"/home/vscode/.claude/.pnp-setup-\$(node -v | tr -d 'v')\"
+      if [ ! -f \"\$SETUP_MARKER\" ]; then
+        echo 'First run: rebuilding native addons for Node '\$(node -v)'...'
+        for plugin_dir in /home/vscode/.claude/plugins/cache/*/*/*/; do
+          if [ -d \"\$plugin_dir/node_modules\" ]; then
+            if find \"\$plugin_dir/node_modules\" -name '*.node' -type f 2>/dev/null | head -1 | grep -q .; then
+              plugin_name=\$(echo \"\$plugin_dir\" | sed 's|.*/cache/||' | sed 's|/\$||')
+              echo \"  Rebuilding: \$plugin_name\"
+              (cd \"\$plugin_dir\" && npm rebuild --silent 2>&1) || echo \"    (failed, continuing)\"
+            fi
+          fi
+        done
+        touch \"\$SETUP_MARKER\" 2>/dev/null || true
+        echo 'Native addon setup complete.'
+      fi
+
       export PATH=/home/vscode/.claude/bin:\$PATH
       export PERSONAL_SUPERPOWERS_DIR=/home/vscode/.claude/superpowers
       export MOMENTUM_DB_PATH=/home/vscode/.claude/momentum/momentum.db
