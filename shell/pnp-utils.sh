@@ -394,3 +394,268 @@ CONFIGURATION:
 For full list of claude flags: claude --help
 EOF
 }
+
+# ============== Gas Town Container ==============
+
+# Gas Town container name
+GT_CONTAINER_NAME="${GT_CONTAINER_NAME:-gastown-runtime}"
+GT_CONTAINER_IMAGE="${GT_CONTAINER_IMAGE:-gastown:latest}"
+
+# Start Gas Town in container
+# Usage: gt-up
+gt-up() {
+  # Check if container exists
+  if docker ps -a --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+    if docker ps --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+      echo "Gas Town container already running."
+      echo "Use 'gt-attach' to connect, or 'gt-down' to stop."
+      return 0
+    else
+      echo "Starting existing Gas Town container..."
+      docker start "$GT_CONTAINER_NAME"
+    fi
+  else
+    echo "Creating Gas Town container..."
+
+    # Get docker group ID for socket permissions (if orchestrator mode needed)
+    local docker_gid=$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo "")
+    local docker_args=""
+    if [[ -n "$docker_gid" ]]; then
+      docker_args="--group-add $docker_gid -v /var/run/docker.sock:/var/run/docker.sock"
+    fi
+
+    # Verify host binaries exist
+    if [[ ! -f "$HOME/go/bin/gt" ]]; then
+      echo "Error: gt not found at $HOME/go/bin/gt"
+      echo "Install with: cd ~/Github/gt/gastown && make build && cp gt ~/go/bin/"
+      return 1
+    fi
+    if [[ ! -f "$HOME/go/bin/bd" ]]; then
+      echo "Error: bd not found at $HOME/go/bin/bd"
+      echo "Install with: go install github.com/steveyegge/beads/cmd/bd@latest"
+      return 1
+    fi
+
+    docker run -d \
+      --name "$GT_CONTAINER_NAME" \
+      --hostname gastown \
+      $docker_args \
+      -v "$HOME/go/bin/gt:/usr/local/bin/host/gt:ro" \
+      -v "$HOME/go/bin/bd:/usr/local/bin/host/bd:ro" \
+      -v "$HOME/gt:/home/vscode/gt" \
+      -v "$HOME/Github:/home/vscode/Github" \
+      -v "$HOME/.claude:/home/vscode/.claude" \
+      -v "$HOME/.gitconfig:/home/vscode/.gitconfig:ro" \
+      -v "$HOME/.config/gh:/home/vscode/.config/gh:ro" \
+      -v "$HOME/.ssh:/home/vscode/.ssh:ro" \
+      -e "SUBSTRATIA_API_KEY=$SUBSTRATIA_API_KEY" \
+      -e "GT_CONTAINER=1" \
+      -e "HOME=/home/vscode" \
+      --add-host=host.docker.internal:host-gateway \
+      "$GT_CONTAINER_IMAGE" \
+      bash -c "
+        # Keep container running
+        echo 'Gas Town container started.'
+
+        # Symlink home directory for path compatibility
+        sudo ln -sf /home/vscode /home/$PNP_HOST_USER 2>/dev/null || true
+
+        # Start Gas Town
+        cd /home/vscode/gt
+        export PATH=/usr/local/bin:/home/vscode/.claude/bin:\$PATH
+
+        if [ -f /home/vscode/gt/mayor/town.json ]; then
+          echo 'Starting Gas Town services...'
+          gt up
+        else
+          echo 'Gas Town not installed. Run gt-attach and then: gt install'
+        fi
+
+        # Keep container alive
+        tail -f /dev/null
+      "
+  fi
+
+  # Wait for container to be ready
+  sleep 2
+  echo ""
+  gt-status
+}
+
+# Stop Gas Town container
+gt-down() {
+  if docker ps --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+    echo "Stopping Gas Town..."
+    docker exec "$GT_CONTAINER_NAME" bash -c "cd /home/vscode/gt && gt down 2>/dev/null || true"
+    docker stop "$GT_CONTAINER_NAME"
+    echo "Gas Town container stopped."
+  else
+    echo "Gas Town container is not running."
+  fi
+}
+
+# Remove Gas Town container (preserves data in ~/gt)
+gt-remove() {
+  gt-down 2>/dev/null
+  if docker ps -a --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+    echo "Removing Gas Town container..."
+    docker rm "$GT_CONTAINER_NAME"
+    echo "Container removed. Data preserved in ~/gt"
+  else
+    echo "No Gas Town container to remove."
+  fi
+}
+
+# Attach to Gas Town container (interactive shell)
+gt-attach() {
+  if ! docker ps --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+    echo "Gas Town container not running. Starting..."
+    gt-up
+    sleep 2
+  fi
+
+  echo "Attaching to Gas Town container..."
+  echo "Commands: gt status, gt mayor attach, gt crew at"
+  echo ""
+  docker exec -it "$GT_CONTAINER_NAME" bash -c "
+    cd /home/vscode/gt
+    export PATH=/usr/local/bin:/home/vscode/.claude/bin:\$PATH
+    exec bash
+  "
+}
+
+# Run gt command in container
+gt-exec() {
+  if ! docker ps --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+    echo "Error: Gas Town container not running. Run 'gt-up' first."
+    return 1
+  fi
+
+  docker exec "$GT_CONTAINER_NAME" bash -c "
+    cd /home/vscode/gt
+    export PATH=/usr/local/bin:/home/vscode/.claude/bin:\$PATH
+    gt $*
+  "
+}
+
+# Show Gas Town container status
+gt-status() {
+  echo "=== Gas Town Container ==="
+  if docker ps --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+    echo "Container: RUNNING"
+    echo ""
+    docker exec "$GT_CONTAINER_NAME" bash -c "
+      cd /home/vscode/gt
+      export PATH=/usr/local/bin:/home/vscode/.claude/bin:\$PATH
+      gt status 2>/dev/null || echo '(Gas Town not initialized)'
+    "
+  else
+    if docker ps -a --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+      echo "Container: STOPPED"
+    else
+      echo "Container: NOT CREATED"
+    fi
+  fi
+}
+
+# Attach to mayor inside container
+gt-mayor() {
+  if ! docker ps --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+    echo "Error: Gas Town container not running. Run 'gt-up' first."
+    return 1
+  fi
+
+  docker exec -it "$GT_CONTAINER_NAME" bash -c "
+    cd /home/vscode/gt
+    export PATH=/usr/local/bin:/home/vscode/.claude/bin:\$PATH
+    gt mayor attach
+  "
+}
+
+# Build Gas Town container image
+gt-build() {
+  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local dockerfile_dir="$(dirname "$script_dir")/gastown"
+
+  if [[ ! -f "$dockerfile_dir/Dockerfile" ]]; then
+    echo "Error: Dockerfile not found at $dockerfile_dir/Dockerfile"
+    return 1
+  fi
+
+  echo "Building Gas Town container image..."
+  docker build -t "$GT_CONTAINER_IMAGE" "$dockerfile_dir"
+}
+
+# Show logs from Gas Town container
+gt-logs() {
+  if ! docker ps --format '{{.Names}}' | grep -q "^${GT_CONTAINER_NAME}$"; then
+    echo "Error: Gas Town container not running."
+    return 1
+  fi
+
+  local follow=""
+  [[ "$1" == "-f" ]] && follow="-f"
+
+  docker exec "$GT_CONTAINER_NAME" bash -c "
+    cd /home/vscode/gt
+    export PATH=/usr/local/bin:/home/vscode/.claude/bin:\$PATH
+    gt logs $follow
+  "
+}
+
+gt-container-help() {
+  cat << 'EOF'
+Gas Town Container Commands
+
+LIFECYCLE:
+  gt-build             Build the Gas Town container image
+  gt-up                Start Gas Town container (creates if needed)
+  gt-down              Stop Gas Town container
+  gt-remove            Remove container (preserves ~/gt data)
+
+INTERACTION:
+  gt-attach            Interactive shell in container
+  gt-exec <cmd>        Run gt command in container (e.g., gt-exec status)
+  gt-mayor             Attach to mayor session
+  gt-status            Show container and Gas Town status
+  gt-logs [-f]         Show/follow Gas Town logs
+
+CONFIGURATION:
+  GT_CONTAINER_NAME    Container name (default: gastown-runtime)
+  GT_CONTAINER_IMAGE   Image to use (default: gastown:latest)
+
+ISOLATION:
+  Container has access to:
+    ~/gt               Gas Town data (read-write)
+    ~/Github           Git repositories (read-write)
+    ~/.claude          Claude config (read-write)
+    ~/.gitconfig       Git config (read-only)
+    ~/.config/gh       GitHub CLI (read-only)
+    ~/.ssh             SSH keys (read-only)
+
+  Container CANNOT access:
+    Rest of home directory
+    System files
+    Other user data
+
+FIRST TIME SETUP:
+  1. gt-build          Build the container image
+  2. gt-up             Start the container
+  3. gt-attach         Enter the container
+  4. gt install        Initialize Gas Town (if needed)
+  5. gt rig add ...    Add your rigs
+  6. gt up             Start Gas Town services
+
+UPDATING GT/BD:
+  gt and bd binaries are mounted from host (~/go/bin/).
+  Update on host and container gets updates immediately:
+
+    # Update gt
+    cd ~/Github/gt/gastown && git pull && make build && cp gt ~/go/bin/
+
+    # Update bd
+    go install github.com/steveyegge/beads/cmd/bd@latest
+
+  No need to rebuild container image for gt/bd updates!
+EOF
+}
